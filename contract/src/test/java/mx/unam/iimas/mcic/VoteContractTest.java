@@ -69,7 +69,7 @@ public final class VoteContractTest {
 
             String json = "{\"value\":\"TheVote\"}";
             String key = "1001";
-            contract.createVote(context, key, json);
+            contract.createVote(context, key, "TheVote");
 
             verify(stub).putState(key, json.getBytes(UTF_8));
         }
@@ -86,7 +86,7 @@ public final class VoteContractTest {
             Exception thrown = assertThrows(RuntimeException.class,
                     () -> contract.createVote(context, "1002", "TheVote"));
 
-            assertEquals(thrown.getMessage(), "The asset 10002 already exists");
+            assertEquals(thrown.getMessage(), "The asset 1002 already exists");
         }
     }
 
