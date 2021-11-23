@@ -65,13 +65,15 @@ public class VoteContract implements ContractInterface {
     }
 
     @Transaction
-    public void generateBallot(Context context, ArrayList<Vote> votes, Election election, Voter voter) {
+    public Response generateBallot(Context context, ArrayList<Vote> votes, Election election, Voter voter) {
         Ballot ballot = new Ballot(context, election, votes, voter.getId());
         voter.setBallot(ballot);
         voter.setBallotCast(true);
 
         context.getStub().putState(ballot.getId(), toJSONString(ballot).getBytes(UTF_8));
         context.getStub().putState(voter.getId(), toJSONString(voter).getBytes(UTF_8));
+
+        return ResponseUtils.newSuccessResponse();
     }
 
     @Transaction
@@ -106,17 +108,6 @@ public class VoteContract implements ContractInterface {
     }
 
     @Transaction
-    public Response updateVoteAsset(Context context, String id, String newValue) {
-        boolean exists = this.voteAssetExists(context, id);
-        if (!exists) {
-            return ResponseUtils.newErrorResponse(new RuntimeException("The asset " + id + " does not exist"));
-        }
-        Vote vote = new Vote(newValue);
-        context.getStub().putState(id, toJSONString(vote).getBytes(UTF_8));
-        return ResponseUtils.newSuccessResponse();
-    }
-
-    @Transaction
     public Response deleteVoteAsset(Context context, String id) {
         boolean exists = this.voteAssetExists(context, id);
         if (!exists) {
@@ -127,7 +118,7 @@ public class VoteContract implements ContractInterface {
     }
 
     @Transaction
-    public Voter castVote(Context context, String args) {
+    public Response castVote(Context context, String args) {
         VoteRequest request = fromJSONString(args, VoteRequest.class);
         String votableId = request.getPicked();
         boolean electionExists = this.voteAssetExists(context, request.getElectionId());
@@ -138,14 +129,13 @@ public class VoteContract implements ContractInterface {
             Voter voter = fromJSONString(new String(voterAsBytes, UTF_8), Voter.class);
 
             if (voter.isBallotCast()) {
-                System.out.println("This voter has already cast this ballot!");
-                return null;
+                return ResponseUtils.newErrorResponse("This voter has already cast this ballot!");
             }
             LocalDate currentTime = LocalDate.now();
             if (election.getStartDate().compareTo(currentTime) <= 0 && election.getEndDate().compareTo(currentTime) > 0) {
                 boolean votableExists = this.voteAssetExists(context, votableId);
                 if (!votableExists) {
-                    System.out.println("VotableId does not exists!");
+                    return ResponseUtils.newErrorResponse("VotableId does not exists!");
                 }
                 byte[] votableAsBytes = context.getStub().getState(votableId);
                 Vote vote = fromJSONString(new String(votableAsBytes), Vote.class);
@@ -156,13 +146,11 @@ public class VoteContract implements ContractInterface {
                 voter.setPicked(request.getPicked());
 
                 context.getStub().putState(voter.getId(), toJSONString(voter).getBytes(UTF_8));
-                return voter;
+                return ResponseUtils.newSuccessResponse(toJSONString(voter));
             } else {
                 System.out.println("The election is not open now");
             }
-        } else {
-            System.out.println("The election is not open now");
-            return null;
         }
+        return ResponseUtils.newErrorResponse("The election is not open now");
     }
 }
