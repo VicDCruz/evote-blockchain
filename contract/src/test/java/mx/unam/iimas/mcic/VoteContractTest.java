@@ -1,5 +1,6 @@
 package mx.unam.iimas.mcic;
 
+import mx.unam.iimas.mcic.vote.Vote;
 import org.hyperledger.fabric.contract.Context;
 import org.hyperledger.fabric.shim.ChaincodeStub;
 import org.junit.jupiter.api.Nested;
@@ -8,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import java.nio.charset.StandardCharsets;
 
 import static java.nio.charset.StandardCharsets.*;
+import static mx.unam.iimas.mcic.utils.JsonMapper.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
@@ -24,7 +26,7 @@ public final class VoteContractTest {
 
             String key = "1001";
             when(stub.getState(key)).thenReturn(new byte[] {});
-            boolean result = contract.voteExists(context, key);
+            boolean result = contract.voteAssetExists(context, key);
 
             assertFalse(result);
         }
@@ -38,7 +40,7 @@ public final class VoteContractTest {
 
             String key = "1001";
             when(stub.getState(key)).thenReturn(new byte[] {42});
-            boolean result = contract.voteExists(context, key);
+            boolean result = contract.voteAssetExists(context, key);
 
             assertTrue(result);
         }
@@ -52,7 +54,7 @@ public final class VoteContractTest {
 
             String key = "1002";
             when(stub.getState(key)).thenReturn(null);
-            boolean result = contract.voteExists(context, key);
+            boolean result = contract.voteAssetExists(context, key);
 
             assertFalse(result);
         }
@@ -100,10 +102,10 @@ public final class VoteContractTest {
         Vote asset = new  Vote();
         asset.setValue("Valuable");
 
-        String json = asset.toJSONString();
+        String json = toJSONString(asset);
         when(stub.getState("1001")).thenReturn(json.getBytes(StandardCharsets.UTF_8));
 
-        Vote returnedAsset = contract.readVote(context, "1001");
+        Vote returnedAsset = contract.readVoteAsset(context, "1001");
         assertEquals(returnedAsset.getValue(), asset.getValue());
     }
 
@@ -117,7 +119,7 @@ public final class VoteContractTest {
             when(context.getStub()).thenReturn(stub);
             when(stub.getState("1001")).thenReturn(new byte[] { 42 });
 
-            contract.updateVote(context, "1001", "updates");
+            contract.updateVoteAsset(context, "1001", "updates");
 
             String json = "{\"value\":\"updates\"}";
             verify(stub).putState("1001", json.getBytes(UTF_8));
@@ -133,7 +135,7 @@ public final class VoteContractTest {
             when(stub.getState("1001")).thenReturn(null);
 
             Exception thrown = assertThrows(RuntimeException.class,
-                    () -> contract.updateVote(context, "1001", "TheVote"));
+                    () -> contract.updateVoteAsset(context, "1001", "TheVote"));
 
             assertEquals(thrown.getMessage(), "The asset 1001 does not exist");
         }
@@ -148,7 +150,7 @@ public final class VoteContractTest {
         when(stub.getState("1001")).thenReturn(null);
 
         Exception thrown = assertThrows(RuntimeException.class,
-                () -> contract.deleteVote(context, "1001"));
+                () -> contract.deleteVoteAsset(context, "1001"));
 
         assertEquals(thrown.getMessage(), "The asset 1001 does not exist");
 
