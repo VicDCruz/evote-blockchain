@@ -16,7 +16,7 @@ public class JsonMapper {
 
     public static String toJSONString(Object obj) {
         try {
-            return objectMapper.writeValueAsString(obj);
+            return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(obj);
         } catch (Exception e) {
             e.printStackTrace();
             return null;

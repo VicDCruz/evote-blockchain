@@ -1,5 +1,8 @@
 package mx.unam.iimas.mcic.vote;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.*;
 import mx.unam.iimas.mcic.voting_type.VotingType;
 import org.hyperledger.fabric.contract.annotation.DataType;
@@ -11,13 +14,20 @@ import org.hyperledger.fabric.contract.annotation.Property;
 @Getter
 @Setter
 @ToString
+@JsonInclude(JsonInclude.Include.NON_NULL)
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class Vote {
 
+    @JsonProperty("value")
     @Property
     private String value;
+    @JsonProperty("id")
     private String id;
+    @JsonProperty("description")
     private String description;
+    @JsonProperty("count")
     private Integer count;
+    @JsonProperty("type")
     private VotingType type;
 
     public Vote(String id, String description) {
