@@ -18,14 +18,14 @@ import org.hyperledger.fabric.contract.annotation.Property;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class Vote {
 
-    @JsonProperty("value")
-    @Property
-    private String value;
     @JsonProperty("id")
+    @Property
     private String id;
     @JsonProperty("description")
+    @Property
     private String description;
     @JsonProperty("count")
+    @Property
     private Integer count;
     @JsonProperty("type")
     private VotingType type;

@@ -7,24 +7,29 @@ import lombok.Setter;
 import lombok.ToString;
 import mx.unam.iimas.mcic.voting_type.VotingType;
 import mx.unam.iimas.mcic.ballot.Ballot;
+import org.hyperledger.fabric.contract.annotation.DataType;
+import org.hyperledger.fabric.contract.annotation.Property;
 
 import static org.apache.commons.lang3.StringUtils.isNotBlank;
 
+@DataType
 @Getter
 @Setter
 @ToString
 @NoArgsConstructor
 public class Voter {
     @JsonProperty("id")
+    @Property
     private String id;
     @JsonProperty("registerId")
     private String registerId;
     @JsonProperty("name")
+    @Property
     private VoterName name;
     @JsonProperty("ballot")
     private Ballot ballot;
-    @JsonProperty("isBallotCreated")
-    private boolean isBallotCreated;
+    @JsonProperty("isBallotCasted")
+    private boolean isBallotCasted;
     @JsonProperty("type")
     private VotingType type;
     @JsonProperty("picked")
@@ -35,7 +40,7 @@ public class Voter {
             this.id = id;
             this.registerId = registerId;
             this.name = new VoterName(firstName, lastName);
-            this.isBallotCreated = false;
+            this.isBallotCasted = false;
             this.type = VotingType.VOTER;
         } else if (!this.validateVoter(id)) {
             throw new RuntimeException("The voter ID '" + id + "' is not valid");

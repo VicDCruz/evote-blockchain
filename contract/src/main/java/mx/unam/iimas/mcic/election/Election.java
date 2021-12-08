@@ -8,6 +8,7 @@ import com.fasterxml.jackson.datatype.jsr310.deser.LocalDateDeserializer;
 import com.fasterxml.jackson.datatype.jsr310.ser.LocalDateSerializer;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 import lombok.ToString;
 import mx.unam.iimas.mcic.voting_type.VotingType;
 import org.apache.commons.lang3.StringUtils;
@@ -19,6 +20,7 @@ import java.util.UUID;
 
 @DataType
 @Getter
+@Setter
 @NoArgsConstructor
 @ToString
 public class Election {
@@ -46,6 +48,9 @@ public class Election {
     private LocalDate endDate;
     @JsonProperty("type")
     private VotingType type;
+    @JsonProperty("isClosed")
+    @Property
+    private boolean isClosed;
 
     public Election(String name, String country, Integer year, LocalDate startDate, LocalDate endDate) {
         this.id = UUID.randomUUID().toString();
@@ -56,6 +61,7 @@ public class Election {
             this.startDate = startDate;
             this.endDate = endDate;
             this.type = VotingType.ELECTION;
+            this.isClosed = false;
         } else {
             throw new RuntimeException("Not a valid election!");
         }

@@ -31,30 +31,25 @@ public class Ballot {
     private VotingType type;
 
     public Ballot(Context context, Election election, ArrayList<Vote> votableItems , String voterId) {
-        if (this.validateBallot(context, voterId)) {
-            this.election = election;
-            this.votes = votableItems;
-            this.voterId = voterId;
-            this.ballotCast = false;
-            this.id = UUID.randomUUID().toString();
-            this.type = VotingType.BALLOT;
-        } else {
-            System.out.println("A ballot has already been created for this voter.");
-            throw new RuntimeException("A ballot has already been created for this voter.");
-        }
+        this.election = election;
+        this.votes = votableItems;
+        this.voterId = voterId;
+        this.ballotCast = false;
+        this.id = UUID.randomUUID().toString();
+        this.type = VotingType.BALLOT;
     }
 
     private boolean validateBallot(Context context, String voterId) {
         byte[] buffer = context.getStub().getState(voterId);
         if (this.voteExists(buffer)) {
             Voter voter = fromJSONString(new String(buffer), Voter.class);
-            if (voter.isBallotCreated()) {
-                System.out.println("Ballot has already been created for this voter");
+            if (voter.isBallotCasted()) {
+                System.out.println("Ballot has already been casted for this voter");
                 return false;
             }
             return true;
         } else {
-            System.out.println("This ID is not registered to vote");
+            System.out.println("Voter ID '"+ voterId + "' is not registered to vote");
             return false;
         }
     }
