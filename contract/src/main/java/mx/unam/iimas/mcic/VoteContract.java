@@ -6,13 +6,12 @@ import mx.unam.iimas.mcic.configuration.DatabaseConfiguration;
 import mx.unam.iimas.mcic.election.Election;
 import mx.unam.iimas.mcic.query.QueryString;
 import mx.unam.iimas.mcic.query.SelectorString;
+import mx.unam.iimas.mcic.utils.AsymmetricCryptographicHelper;
 import mx.unam.iimas.mcic.vote.Votable;
 import mx.unam.iimas.mcic.vote.Vote;
 import mx.unam.iimas.mcic.vote.VoteHelper;
 import mx.unam.iimas.mcic.voter.Voter;
 import mx.unam.iimas.mcic.voting_type.VotingType;
-
-import org.apache.commons.lang3.ObjectUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.hibernate.Session;
 import org.hyperledger.fabric.contract.Context;
@@ -233,6 +232,16 @@ public class VoteContract implements ContractInterface {
     @Transaction
     public boolean instantiate(Context context) {
         System.out.println("Instantiate was called!");
+        if (!AsymmetricCryptographicHelper.keysExists()) {
+            try {
+                AsymmetricCryptographicHelper.generateKeyPair();
+            } catch (Exception e) {
+                e.printStackTrace();
+                return false;
+            }
+        } else {
+            System.out.println("RSA keys already exists");
+        }
         ArrayList<Voter> voters = new ArrayList<>();
         ArrayList<Votable> votables = new ArrayList<>();
         ArrayList<Election> elections = new ArrayList<>();

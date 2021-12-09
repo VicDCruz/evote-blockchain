@@ -1,6 +1,7 @@
 package mx.unam.iimas.mcic.configuration;
 
 import org.apache.commons.lang3.ObjectUtils;
+import org.hibernate.Session;
 import org.hibernate.SessionFactory;
 import org.hibernate.boot.Metadata;
 import org.hibernate.boot.MetadataSources;
@@ -27,5 +28,12 @@ public class DatabaseConfiguration {
 
     public static SessionFactory getSessionFactory() {
         return sessionFactory;
+    }
+
+    public static Session getSession() {
+        if (sessionFactory.isClosed()) {
+            return sessionFactory.openSession();
+        }
+        return sessionFactory.getCurrentSession();
     }
 }

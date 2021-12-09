@@ -8,9 +8,10 @@
         <!-- Database connection settings -->
         <property name="show_sql">false</property>
         <property name="connection.driver_class">com.mysql.cj.jdbc.Driver</property>
-        <property name="connection.url">jdbc:mysql://172.20.0.6:3306/contract?serverTimezone=America/Mexico_City</property>
+        <property name="connection.url">jdbc:mysql://localhost:3306/contract?serverTimezone=America/Mexico_City&amp;useSSL=false</property>
         <property name="connection.username">root</property>
         <property name="connection.password">root</property>
+        <property name="hibernate.current_session_context_class">org.hibernate.context.internal.ThreadLocalSessionContext</property>
 
         <!-- SQL dialect -->
         <property name="dialect">org.hibernate.dialect.MySQL8Dialect</property>
@@ -19,6 +20,6 @@
         <property name="hbm2ddl.auto">validate</property>
 
         <!-- Names the annotated entity class -->
-        <mapping class="mx.unam.iimas.mcic.Person"/>
+        <mapping class="mx.unam.iimas.mcic.models.UserKey"/>
     </session-factory>
 </hibernate-configuration>
