@@ -5,10 +5,11 @@ import mx.unam.iimas.mcic.ballot.Ballot;
 import mx.unam.iimas.mcic.election.Election;
 import mx.unam.iimas.mcic.query.QueryString;
 import mx.unam.iimas.mcic.query.SelectorString;
+import mx.unam.iimas.mcic.vote.Votable;
 import mx.unam.iimas.mcic.vote.Vote;
+import mx.unam.iimas.mcic.vote.VoteHelper;
 import mx.unam.iimas.mcic.voter.Voter;
 import mx.unam.iimas.mcic.voting_type.VotingType;
-import org.apache.commons.lang3.ObjectUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.hyperledger.fabric.contract.Context;
 import org.hyperledger.fabric.contract.ContractInterface;
@@ -17,12 +18,12 @@ import org.hyperledger.fabric.shim.ledger.KeyValue;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.stream.Collectors;
 
-import static java.nio.charset.StandardCharsets.*;
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Objects.requireNonNull;
+import static mx.unam.iimas.mcic.election.ElectionHelper.isExpired;
 import static mx.unam.iimas.mcic.utils.JsonMapper.*;
 import static org.apache.commons.lang3.ObjectUtils.isEmpty;
 
@@ -36,7 +37,7 @@ import static org.apache.commons.lang3.ObjectUtils.isEmpty;
 @NoArgsConstructor
 public class VoteContract implements ContractInterface {
 
-    private <T> ArrayList<T> queryWithQueryString(Context context, String query, Class<T> tClass) {
+    private <T> ArrayList<T> queryWithQueryString(Context context, String query, Class<T> tClass, boolean decryptValues) {
         System.out.println("Query String - " + query);
         Iterator<KeyValue> resultsIterator = context.getStub().getQueryResult(query).iterator();
         ArrayList<T> allResults = new ArrayList<>();
@@ -45,7 +46,12 @@ public class VoteContract implements ContractInterface {
             if (StringUtils.isNotBlank(res.getStringValue())) {
                 String value = res.getStringValue();
                 System.out.println(value);
-                T tmp = fromJSONString(res.getStringValue(), tClass);
+                T tmp;
+                if (decryptValues) {
+                    tmp = decryptedObject(res.getStringValue(), tClass);
+                } else {
+                    tmp = fromJSONString(res.getStringValue(), tClass);
+                }
                 allResults.add(tmp);
             }
         }
@@ -54,38 +60,35 @@ public class VoteContract implements ContractInterface {
         return allResults;
     }
 
-    private <T> ArrayList<T> queryAll(Context context, Class<T> tClass) {
-        return this.queryWithQueryString(context, "{selector:{}}", tClass);
-    }
-
     private <T> ArrayList<T> queryByObjectType(Context context, VotingType type, Class<T> tClass) {
         QueryString query = QueryString.builder()
                 .selector(SelectorString.builder()
                         .type(type)
                         .build())
                 .build();
-        return this.queryWithQueryString(context, toJSONString(query), tClass);
+        return this.queryWithQueryString(context, toJSONString(query), tClass, type.equals(VotingType.VOTE));
     }
 
     @Transaction
-    public void generateBallot(Context context, ArrayList<Vote> votes, String electionId, String voterId) {
+    public void generateBallot(Context context, String electionId, String voterId) {
         if (!this.voteAssetExists(context, voterId)) {
             System.out.println("Voter ID '"+ voterId + "' is not registered to vote");
             return ;
         }
+        ArrayList<Votable> votables = this.queryByObjectType(context, VotingType.VOTABLE, Votable.class);
         ArrayList<Voter> voters = this.queryByObjectType(context, VotingType.VOTER, Voter.class);
         Voter voter = voters.stream().filter(v -> v.getId().equals(voterId)).collect(Collectors.toList()).get(0);
         ArrayList<Election> elections = this.queryByObjectType(context, VotingType.ELECTION, Election.class);
         Election election = elections.stream().filter(v -> v.getId().equals(electionId)).collect(Collectors.toList()).get(0);
-        this.generateBallot(context, votes, election, voter);
+        this.generateBallot(context, votables, election, voter);
     }
 
-    private void generateBallot(Context context, ArrayList<Vote> votes, Election election, Voter voter) {
+    private void generateBallot(Context context, ArrayList<Votable> votables, Election election, Voter voter) {
         if (voter.isBallotCasted()) {
             System.out.println("Ballot has already been casted for this voter");
             return ;
         }
-        Ballot ballot = new Ballot(context, election, votes, voter.getId());
+        Ballot ballot = new Ballot(context, election, votables, voter.getId());
         voter.setBallot(ballot);
 
         context.getStub().putState(ballot.getId(), requireNonNull(toJSONString(ballot)).getBytes(UTF_8));
@@ -106,8 +109,8 @@ public class VoteContract implements ContractInterface {
             return null;
         }
         Election currentElection = elections.get(0);
-        ArrayList<Vote> votes = this.queryByObjectType(context, VotingType.VOTE, Vote.class);
-        this.generateBallot(context, votes, currentElection, newVoter);
+        ArrayList<Votable> votables = this.queryByObjectType(context, VotingType.VOTABLE, Votable.class);
+        this.generateBallot(context, votables, currentElection, newVoter);
 
         return newVoter;
     }
@@ -163,16 +166,14 @@ public class VoteContract implements ContractInterface {
                 System.out.println("This voter has already cast this ballot!");
                 return false;
             }
-            if (!this.isExpired(election)) {
+            if (!isExpired(election)) {
                 boolean votableExists = this.voteAssetExists(context, votableId);
                 if (!votableExists) {
                     System.out.println("VotableId does not exists!");
                     return false;
                 }
-                byte[] votableAsBytes = context.getStub().getState(votableId);
-                Vote vote = fromJSONString(new String(votableAsBytes), Vote.class);
-                vote.setCount(vote.getCount() + 1);
-                context.getStub().putState(votableId, requireNonNull(toJSONString(vote)).getBytes(UTF_8));
+                Vote vote = new Vote(votableId);
+                context.getStub().putState(vote.getId(), encryptedBytes(vote));
 
                 voter.setBallotCasted(true);
                 voter.setPicked(request.getPicked());
@@ -203,7 +204,7 @@ public class VoteContract implements ContractInterface {
     public boolean instantiate(Context context) {
         System.out.println("Instantiate was called!");
         ArrayList<Voter> voters = new ArrayList<>();
-        ArrayList<Vote> votes = new ArrayList<>();
+        ArrayList<Votable> votables = new ArrayList<>();
         ArrayList<Election> elections = new ArrayList<>();
         Election election;
 
@@ -221,7 +222,7 @@ public class VoteContract implements ContractInterface {
 
         // query for election first before creating one.
         ArrayList<Election> currentElections = this.queryByObjectType(context, VotingType.ELECTION, Election.class);
-        if (currentElections.isEmpty() || this.isExpired(currentElections.get(currentElections.size() - 1))) {
+        if (currentElections.isEmpty() || isExpired(currentElections.get(currentElections.size() - 1))) {
             System.out.println("Generating new election...");
             // Tomorrow is election day
             LocalDate electionStartDate = LocalDate.now();
@@ -238,19 +239,19 @@ public class VoteContract implements ContractInterface {
 
         // populate choices
         System.out.println("Creating vote choices");
-            Vote repVote = new Vote("Republican", "He is a Republican");
-        Vote demVote = new Vote("Democrat", "She is a Democrat");
-        votes.add(repVote);
-        votes.add(demVote);
+        Votable repVotable = new Votable("Republican", "He is a Republican");
+        Votable demVotable = new Votable("Democrat", "She is a Democrat");
+        votables.add(repVotable);
+        votables.add(demVotable);
 
-        votes.forEach(vote -> context.getStub().putState(vote.getId(), requireNonNull(toJSONString(vote)).getBytes(UTF_8)));
+        votables.forEach(votable -> context.getStub().putState(votable.getId(), requireNonNull(toJSONString(votable)).getBytes(UTF_8)));
 
         // generate ballots for all voters
         voters.forEach(voter -> {
             if (voter.isBallotCasted())
                 System.out.println("The voter " + voter.getId() + " already have ballots");
             else
-                this.generateBallot(context, votes, election, voter);
+                this.generateBallot(context, votables, election, voter);
         });
 
         return true;
@@ -262,7 +263,7 @@ public class VoteContract implements ContractInterface {
             System.out.println("No election in the system");
             return null;
         }
-        if (this.isExpired(election)) {
+        if (isExpired(election)) {
             System.out.println("Latest election is already closed");
             return null;
         }
@@ -281,19 +282,20 @@ public class VoteContract implements ContractInterface {
     }
 
     @Transaction
-    public Vote[] countVotes(Context context) {
+    public Votable[] countVotes(Context context) {
         Election election = this.getValidElection(context);
         if (!isEmpty(election)) {
             System.out.println("Election is still opened, can't count the votes");
             return null;
         }
+        ArrayList<Votable> votables = this.queryByObjectType(context, VotingType.VOTABLE, Votable.class);
         ArrayList<Vote> votes = this.queryByObjectType(context, VotingType.VOTE, Vote.class);
-        HashMap<String, Integer> results = new HashMap<>();
-        return votes.toArray(new Vote[results.size()]);
-    }
-
-    private boolean isExpired(Election election) {
-        LocalDate currentTime = LocalDate.now();
-        return election.isClosed() || !(election.getStartDate().compareTo(currentTime) <= 0 && election.getEndDate().compareTo(currentTime) > 0);
+        votes = VoteHelper.filterVotesByDates(votes, election.getStartDate().atStartOfDay(), election.getEndDate().atStartOfDay());
+        votes.forEach(vote -> {
+            Votable tmpVotable = votables.stream().filter(votable -> votable.getId().equals(vote.getVotableId()))
+                    .findFirst().orElse(null);
+            tmpVotable.setCount(tmpVotable.getCount() + 1);
+        });
+        return votables.toArray(new Votable[votables.size()]);
     }
 }

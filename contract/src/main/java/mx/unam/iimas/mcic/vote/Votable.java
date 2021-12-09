@@ -14,34 +14,33 @@ import org.hyperledger.fabric.contract.annotation.DataType;
 import org.hyperledger.fabric.contract.annotation.Property;
 
 import java.time.LocalDateTime;
-import java.util.UUID;
 
 @DataType
 @NoArgsConstructor
+@AllArgsConstructor
 @Getter
 @Setter
 @ToString
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonIgnoreProperties(ignoreUnknown = true)
-public class Vote {
+public class Votable {
+
     @JsonProperty("id")
     @Property
     private String id;
+    @JsonProperty("description")
+    @Property
+    private String description;
+    @JsonProperty("count")
+    @Property
+    private Integer count;
     @JsonProperty("type")
     private VotingType type;
-    @JsonProperty("votableId")
-    private String votableId;
-    @JsonProperty("timestamp")
-    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd/MM/yyyy HH:mm:ss")
-    @JsonDeserialize(using = LocalDateTimeDeserializer.class)
-    @JsonSerialize(using = LocalDateTimeSerializer.class)
-    @Property
-    private LocalDateTime timestamp;
 
-    public Vote(String votableId) {
-        this.id = UUID.randomUUID().toString();
-        this.type = VotingType.VOTE;
-        this.votableId = votableId;
-        this.timestamp = LocalDateTime.now();
+    public Votable(String id, String description) {
+        this.id = id;
+        this.description = description;
+        this.count = 0;
+        this.type = VotingType.VOTABLE;
     }
 }

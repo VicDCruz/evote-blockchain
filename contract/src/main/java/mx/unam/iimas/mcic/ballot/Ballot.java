@@ -5,7 +5,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import mx.unam.iimas.mcic.voting_type.VotingType;
 import mx.unam.iimas.mcic.election.Election;
-import mx.unam.iimas.mcic.vote.Vote;
+import mx.unam.iimas.mcic.vote.Votable;
 import mx.unam.iimas.mcic.voter.Voter;
 import org.hyperledger.fabric.contract.Context;
 
@@ -20,7 +20,7 @@ public class Ballot {
     @JsonProperty("id")
     private String id;
     @JsonProperty("votes")
-    private ArrayList<Vote> votes;
+    private ArrayList<Votable> votables;
     @JsonProperty("voterId")
     private String voterId;
     @JsonProperty("election")
@@ -30,9 +30,9 @@ public class Ballot {
     @JsonProperty("type")
     private VotingType type;
 
-    public Ballot(Context context, Election election, ArrayList<Vote> votableItems , String voterId) {
+    public Ballot(Context context, Election election, ArrayList<Votable> votableItems , String voterId) {
         this.election = election;
-        this.votes = votableItems;
+        this.votables = votableItems;
         this.voterId = voterId;
         this.ballotCast = false;
         this.id = UUID.randomUUID().toString();
