@@ -2,6 +2,7 @@ package mx.unam.iimas.mcic;
 
 import lombok.NoArgsConstructor;
 import mx.unam.iimas.mcic.ballot.Ballot;
+import mx.unam.iimas.mcic.configuration.DatabaseConfiguration;
 import mx.unam.iimas.mcic.election.Election;
 import mx.unam.iimas.mcic.query.QueryString;
 import mx.unam.iimas.mcic.query.SelectorString;
@@ -10,7 +11,10 @@ import mx.unam.iimas.mcic.vote.Vote;
 import mx.unam.iimas.mcic.vote.VoteHelper;
 import mx.unam.iimas.mcic.voter.Voter;
 import mx.unam.iimas.mcic.voting_type.VotingType;
+
+import org.apache.commons.lang3.ObjectUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.hibernate.Session;
 import org.hyperledger.fabric.contract.Context;
 import org.hyperledger.fabric.contract.ContractInterface;
 import org.hyperledger.fabric.contract.annotation.*;
@@ -36,6 +40,32 @@ import static org.apache.commons.lang3.ObjectUtils.isEmpty;
 @Default
 @NoArgsConstructor
 public class VoteContract implements ContractInterface {
+    private Session session;
+
+    @Transaction
+    public String openDatabaseConnection(Context context) {
+        try {
+            this.session = DatabaseConfiguration.getSessionFactory().openSession();
+            System.out.println("MySQL connection opened");
+            String sql = "SELECT VERSION()";
+            String res = (String) this.session.createNativeQuery(sql).getSingleResult();
+            String output = "Actual MySQL version: " + res;
+            System.out.println(output);
+            return output;
+        } catch (Exception e) {
+            this.closeDatabaseConnection(context);
+            e.printStackTrace();
+        }
+        return "Error at execution";
+    }
+
+    @Transaction
+    public String closeDatabaseConnection(Context context) {
+        DatabaseConfiguration.getSessionFactory().close();
+        String output = "MySQL connection closed";
+        System.out.println(output);
+        return output;
+    }
 
     private <T> ArrayList<T> queryWithQueryString(Context context, String query, Class<T> tClass, boolean decryptValues) {
         System.out.println("Query String - " + query);
