@@ -21,11 +21,6 @@ public class Voter {
     @JsonProperty("id")
     @Property
     private String id;
-    @JsonProperty("registerId")
-    private String registerId;
-    @JsonProperty("name")
-    @Property
-    private VoterName name;
     @JsonProperty("ballot")
     private Ballot ballot;
     @JsonProperty("isBallotCasted")
@@ -35,25 +30,17 @@ public class Voter {
     @JsonProperty("picked")
     private String picked;
 
-    public Voter(String id, String registerId, String firstName, String lastName) {
-        if (this.validateVoter(id) && this.validateRegister(registerId)) {
+    public Voter(String id) {
+        if (this.validateVoter(id)) {
             this.id = id;
-            this.registerId = registerId;
-            this.name = new VoterName(firstName, lastName);
             this.isBallotCasted = false;
             this.type = VotingType.VOTER;
         } else if (!this.validateVoter(id)) {
             throw new RuntimeException("The voter ID '" + id + "' is not valid");
-        } else {
-            throw new RuntimeException("The register ID '" + registerId + "' is not valid");
         }
     }
 
     private boolean validateVoter(String id) {
         return isNotBlank(id);
-    }
-
-    private boolean validateRegister(String registerId) {
-        return isNotBlank(registerId);
     }
 }

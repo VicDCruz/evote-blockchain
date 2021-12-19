@@ -4,14 +4,16 @@ import lombok.NoArgsConstructor;
 import mx.unam.iimas.mcic.ballot.Ballot;
 import mx.unam.iimas.mcic.configuration.DatabaseConfiguration;
 import mx.unam.iimas.mcic.election.Election;
+import mx.unam.iimas.mcic.models.Receipt;
+import mx.unam.iimas.mcic.models.User;
 import mx.unam.iimas.mcic.query.QueryString;
 import mx.unam.iimas.mcic.query.SelectorString;
-import mx.unam.iimas.mcic.utils.AsymmetricCryptographicHelper;
 import mx.unam.iimas.mcic.vote.Votable;
 import mx.unam.iimas.mcic.vote.Vote;
 import mx.unam.iimas.mcic.vote.VoteHelper;
 import mx.unam.iimas.mcic.voter.Voter;
 import mx.unam.iimas.mcic.voting_type.VotingType;
+import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.hibernate.Session;
 import org.hyperledger.fabric.contract.Context;
@@ -19,9 +21,13 @@ import org.hyperledger.fabric.contract.ContractInterface;
 import org.hyperledger.fabric.contract.annotation.*;
 import org.hyperledger.fabric.shim.ledger.KeyValue;
 
+import javax.persistence.Query;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
@@ -44,10 +50,12 @@ public class VoteContract implements ContractInterface {
     @Transaction
     public String openDatabaseConnection(Context context) {
         try {
-            this.session = DatabaseConfiguration.getSessionFactory().openSession();
+            this.session = DatabaseConfiguration.getSession();
             System.out.println("MySQL connection opened");
             String sql = "SELECT VERSION()";
+            this.session.beginTransaction();
             String res = (String) this.session.createNativeQuery(sql).getSingleResult();
+            this.session.close();
             String output = "Actual MySQL version: " + res;
             System.out.println(output);
             return output;
@@ -66,7 +74,7 @@ public class VoteContract implements ContractInterface {
         return output;
     }
 
-    private <T> ArrayList<T> queryWithQueryString(Context context, String query, Class<T> tClass, boolean decryptValues) {
+    private <T> ArrayList<T> queryWithQueryString(Context context, String query, Class<T> tClass) {
         System.out.println("Query String - " + query);
         Iterator<KeyValue> resultsIterator = context.getStub().getQueryResult(query).iterator();
         ArrayList<T> allResults = new ArrayList<>();
@@ -75,12 +83,7 @@ public class VoteContract implements ContractInterface {
             if (StringUtils.isNotBlank(res.getStringValue())) {
                 String value = res.getStringValue();
                 System.out.println(value);
-                T tmp;
-                if (decryptValues) {
-                    tmp = decryptedObject(res.getStringValue(), tClass);
-                } else {
-                    tmp = fromJSONString(res.getStringValue(), tClass);
-                }
+                T tmp = fromJSONString(res.getStringValue(), tClass);
                 allResults.add(tmp);
             }
         }
@@ -95,7 +98,7 @@ public class VoteContract implements ContractInterface {
                         .type(type)
                         .build())
                 .build();
-        return this.queryWithQueryString(context, toJSONString(query), tClass, type.equals(VotingType.VOTE));
+        return this.queryWithQueryString(context, toJSONString(query), tClass);
     }
 
     @Transaction
@@ -124,19 +127,74 @@ public class VoteContract implements ContractInterface {
         context.getStub().putState(voter.getId(), requireNonNull(toJSONString(voter)).getBytes(UTF_8));
     }
 
+    private String getRandomVoterId(Context context) {
+        ArrayList<Voter> voters = this.queryByObjectType(context, VotingType.VOTER, Voter.class);
+        List<String> ids = voters.stream().map(voter -> voter.getId()).collect(Collectors.toList());
+        String output;
+        do {
+            output = RandomStringUtils.randomNumeric(5);
+        } while(!ids.contains(output.toString()));
+        return output;
+    }
+
+    private Integer saveUser(String registerId, String firstName, String lastName) {
+        User user = User.builder()
+                .registerId(registerId)
+                .firstName(firstName)
+                .lastName(lastName)
+                .build();
+        Session session = DatabaseConfiguration.getSession();
+        session.beginTransaction();
+        Integer id = (Integer) session.save(user);
+        session.close();
+        return id;
+    }
+
     @Transaction
-    public Voter createVoter(Context context, String id, String registerId, String firstName, String lastName) {
-        if (voteAssetExists(context, id)) {
-            throw new RuntimeException("The asset " + id + " already exists");
+    public boolean userExists(Context context, String registerId) {
+        Session session = DatabaseConfiguration.getSession();
+        session.beginTransaction();
+        Query query = session.createQuery("FROM User WHERE registerId=:registerId").setParameter("registerId", registerId);
+        List results = query.getResultList();
+        session.close();
+        return results.size() > 0;
+    }
+
+    @Transaction
+    public User getUser(Context context, String registerId) {
+        Session session = DatabaseConfiguration.getSession();
+        session.beginTransaction();
+        Query query = session.createQuery("FROM User WHERE registerId=:registerId").setParameter("registerId", registerId);
+        List users = query.getResultList();
+        session.close();
+        if (users.size() > 0)
+            return (User) users.get(users.size() - 1);
+        System.out.println("No user found");
+        return null;
+    }
+
+    private Voter createVoterNoVerification(Context context, String registerId, String firstName, String lastName) {
+        String id;
+        if (this.userExists(context, registerId)) {
+            System.out.println("User with registerId '" + registerId + "' already exists");
+            id = this.getUser(context, registerId).getId().toString();
+        } else {
+            id = this.saveUser(registerId, firstName, lastName).toString();
         }
-        Voter newVoter = new Voter(id, registerId, firstName, lastName);
+        Voter newVoter = new Voter(id);
         context.getStub().putState(newVoter.getId(), requireNonNull(toJSONString(newVoter)).getBytes(UTF_8));
+        return newVoter;
+    }
+
+    @Transaction
+    public Voter createVoter(Context context, String registerId, String firstName, String lastName) {
+        Voter newVoter = createVoterNoVerification(context, registerId, firstName, lastName);
         ArrayList<Election> elections = this.queryByObjectType(context, VotingType.ELECTION, Election.class);
         if (elections.isEmpty()) {
-            // ResponseUtils.newErrorResponse(new RuntimeException("No elections! Run the init() function first"));
             System.out.println("No elections! Run the init() function first");
             return null;
         }
+        System.out.println("Generating new ballot");
         Election currentElection = elections.get(0);
         ArrayList<Votable> votables = this.queryByObjectType(context, VotingType.VOTABLE, Votable.class);
         this.generateBallot(context, votables, currentElection, newVoter);
@@ -181,7 +239,7 @@ public class VoteContract implements ContractInterface {
     }
 
     @Transaction
-    public boolean castVote(Context context, String picked, String electionId, String voterId) {
+    public Receipt castVote(Context context, String picked, String electionId, String voterId) {
         VoteRequest request = new VoteRequest(picked, electionId, voterId);
         String votableId = request.getPicked();
         boolean electionExists = this.voteAssetExists(context, request.getElectionId());
@@ -193,31 +251,67 @@ public class VoteContract implements ContractInterface {
 
             if (voter.isBallotCasted()) {
                 System.out.println("This voter has already cast this ballot!");
-                return false;
+                return null;
             }
             if (!isExpired(election)) {
                 boolean votableExists = this.voteAssetExists(context, votableId);
                 if (!votableExists) {
                     System.out.println("VotableId does not exists!");
-                    return false;
+                    return null;
                 }
                 Vote vote = new Vote(votableId);
-                context.getStub().putState(vote.getId(), encryptedBytes(vote));
+                context.getStub().putState(vote.getId(), requireNonNull(toJSONString(vote)).getBytes(UTF_8));
 
                 voter.setBallotCasted(true);
                 voter.setPicked(request.getPicked());
 
                 context.getStub().putState(voter.getId(), requireNonNull(toJSONString(voter)).getBytes(UTF_8));
-                // return ResponseUtils.newSuccessResponse(toJSONString(voter), toJSONString(voter).getBytes(UTF_8));
-                return true;
+
+                return getReceipt(voterId);
             } else {
                 System.out.println("The election is not open now");
-                return false;
+                return null;
             }
         }
         // return ResponseUtils.newErrorResponse("The election is not open now");
         System.out.println("The election doesn't exist");
-        return false;
+        return null;
+    }
+
+    @Transaction
+    public Receipt getReceipt(Context context, String voterId) {
+        return getReceipt(voterId);
+    }
+
+    @Transaction
+    public boolean verifyReceipt(Context context, String receiptId) {
+        Receipt receipt;
+        Session session = DatabaseConfiguration.getSession();
+        session.beginTransaction();
+        Query query = session.createQuery("FROM Receipt WHERE value=:value").setParameter("value", receiptId);
+        List results = query.getResultList();
+        session.close();
+        return results.size() > 0;
+    }
+
+    private Receipt getReceipt(String voterId) {
+        Receipt receipt;
+        Session session = DatabaseConfiguration.getSession();
+        session.beginTransaction();
+        Query query = session.createQuery("FROM Receipt WHERE voterId=:voterId").setParameter("voterId", voterId);
+        List results = query.getResultList();
+        if (results.size() > 0) {
+            receipt = (Receipt) results.get(results.size() - 1);
+        } else {
+            receipt = Receipt.builder()
+                    .value(UUID.randomUUID().toString())
+                    .voterId(voterId)
+                    .timestamp(LocalDateTime.now())
+                    .build();
+            session.save(receipt);
+        }
+        session.close();
+        return receipt;
     }
 
     @Transaction
@@ -232,7 +326,7 @@ public class VoteContract implements ContractInterface {
     @Transaction
     public boolean instantiate(Context context) {
         System.out.println("Instantiate was called!");
-        if (!AsymmetricCryptographicHelper.keysExists()) {
+        /*if (!AsymmetricCryptographicHelper.keysExists()) {
             try {
                 AsymmetricCryptographicHelper.generateKeyPair();
             } catch (Exception e) {
@@ -241,23 +335,11 @@ public class VoteContract implements ContractInterface {
             }
         } else {
             System.out.println("RSA keys already exists");
-        }
+        }*/
         ArrayList<Voter> voters = new ArrayList<>();
         ArrayList<Votable> votables = new ArrayList<>();
         ArrayList<Election> elections = new ArrayList<>();
         Election election;
-
-        // create voters
-        Voter voter1 = new Voter("V1", "234", "Horea", "Porutiu");
-        Voter voter2 = new Voter("V2", "345", "Duncan", "Conley");
-        voters.add(voter1);
-        voters.add(voter2);
-
-        // add the voters to world state
-        context.getStub().putState(voter1.getId(), requireNonNull(toJSONString(voter1)).getBytes(UTF_8));
-        System.out.println("Voter " + voter1.getId() + " was " + (this.voteAssetExists(context, voter1.getId()) ? "successfully" : "not") + " created");
-        context.getStub().putState(voter2.getId(), requireNonNull(toJSONString(voter2)).getBytes(UTF_8));
-        System.out.println("Voter " + voter2.getId() + " was " + (this.voteAssetExists(context, voter2.getId()) ? "successfully" : "not") + " created");
 
         // query for election first before creating one.
         ArrayList<Election> currentElections = this.queryByObjectType(context, VotingType.ELECTION, Election.class);
@@ -275,6 +357,12 @@ public class VoteContract implements ContractInterface {
             election = currentElections.get(currentElections.size() - 1);
         }
         System.out.println("Election selected: " + election);
+
+        // create voters
+        Voter voter1 = this.createVoterNoVerification(context, "234", "Daniel", "Cruz");
+        Voter voter2 = this.createVoterNoVerification(context, "123", "Victor", "Cruz");
+        voters.add(voter1);
+        voters.add(voter2);
 
         // populate choices
         System.out.println("Creating vote choices");
@@ -322,8 +410,8 @@ public class VoteContract implements ContractInterface {
 
     @Transaction
     public Votable[] countVotes(Context context) {
-        Election election = this.getValidElection(context);
-        if (!isEmpty(election)) {
+        Election election = this.getLatestElection(context);
+        if (isEmpty(election) || !isExpired(election)) {
             System.out.println("Election is still opened, can't count the votes");
             return null;
         }

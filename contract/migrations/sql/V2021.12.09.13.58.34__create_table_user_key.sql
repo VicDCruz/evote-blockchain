@@ -1,0 +1,17 @@
+START TRANSACTION;
+SET NAMES utf8mb4;
+
+CREATE DATABASE IF NOT EXISTS `contract` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci */ /*!80016 DEFAULT ENCRYPTION='N' */;
+USE `contract`;
+
+DROP TABLE IF EXISTS `UserKey`;
+CREATE TABLE `UserKey` (
+   `id` int unsigned NOT NULL AUTO_INCREMENT,
+   `value` text DEFAULT NULL,
+   `modulus` text DEFAULT NULL,
+   `exponent` text DEFAULT NULL,
+   `keyType` varchar(40) DEFAULT NULL,
+   PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+COMMIT;

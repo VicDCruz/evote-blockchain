@@ -1,17 +1,9 @@
 package mx.unam.iimas.mcic;
 
-import mx.unam.iimas.mcic.vote.Vote;
-import org.hyperledger.fabric.contract.Context;
-import org.hyperledger.fabric.shim.ChaincodeStub;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
-import java.nio.charset.StandardCharsets;
-
-import static java.nio.charset.StandardCharsets.*;
-import static mx.unam.iimas.mcic.utils.JsonMapper.*;
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
 
 public final class VoteContractTest {
 

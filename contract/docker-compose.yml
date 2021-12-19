@@ -1,0 +1,55 @@
+version: '3.9'
+
+networks:
+  thenetwork:
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.20.0.0/24
+
+services:
+  flyway:
+    image: flyway/flyway:7.14.1
+    command: -url="jdbc:mysql://db:3306?useUnicode=true&characterEncoding=utf8&useSSL=false" -schemas=contract -user=root -password=root migrate
+    volumes:
+      - "./migrations/sql:/flyway/sql"
+    depends_on:
+      - db
+    networks:
+      thenetwork:
+        ipv4_address: 172.20.0.5
+
+  db:
+    image: mysql:8.0
+    command: --default-authentication-plugin=mysql_native_password
+    restart: always
+    ports:
+      - 3306:3306
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+    networks:
+      thenetwork:
+        ipv4_address: 172.20.0.6
+
+  adminer:
+    image: adminer
+    restart: always
+    ports:
+      - 9090:8080
+    depends_on:
+      - db
+    networks:
+      thenetwork:
+        ipv4_address: 172.20.0.7
+
+  # front:
+  #   build: ../contract-front
+  #   ports:
+  #     - 3000:3000
+  #   networks:
+  #     thenetwork:
+  #       ipv4_address: 172.20.0.8
+  #   volumes:
+  #     - ../contract-front:/contract
+  #     - /contract/node_modules
+  #     - /contract/.next

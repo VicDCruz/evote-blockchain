@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="mx.unam.iimas.mcic.VoteContractTest$AssetCreates" tests="2" skipped="0" failures="0" errors="0" timestamp="2021-12-09T06:51:48" hostname="VICTORSPECTRE" time="0.005">
+  <properties/>
+  <testcase name="alreadyExists()" classname="mx.unam.iimas.mcic.VoteContractTest$AssetCreates" time="0.002"/>
+  <testcase name="newAssetCreate()" classname="mx.unam.iimas.mcic.VoteContractTest$AssetCreates" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
